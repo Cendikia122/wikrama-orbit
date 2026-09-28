@@ -19,7 +19,7 @@ class AbsensiGdsController extends Controller
         $absensi = AbsensiGds::orderBy('tanggal', 'desc')->paginate(30);
         
         // Summary per anggota: count tidak_hadir
-        $summary = AbsensiGds::selectRaw('nama_anggota, divisi, COUNT(*) as total_gds, SUM(CASE WHEN status_kehadiran = "tidak_hadir" THEN 1 ELSE 0 END) as total_absen, SUM(CASE WHEN status_kehadiran = "terlambat" THEN 1 ELSE 0 END) as total_terlambat, SUM(poin_pelanggaran) as total_poin')
+        $summary = AbsensiGds::selectRaw("nama_anggota, divisi, COUNT(*) as total_gds, SUM(CASE WHEN status_kehadiran = 'tidak_hadir' THEN 1 ELSE 0 END) as total_absen, SUM(CASE WHEN status_kehadiran = 'terlambat' THEN 1 ELSE 0 END) as total_terlambat, SUM(poin_pelanggaran) as total_poin")
             ->groupBy('nama_anggota', 'divisi')
             ->orderBy('total_absen', 'desc')
             ->get();
