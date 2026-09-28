@@ -18,6 +18,16 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+// Inisialisasi & Seeding Database (Aman: hanya berjalan jika users masih kosong)
+Route::get('/init-db', function () {
+    if (\App\Models\User::count() > 0) {
+        return redirect('/login')->with('success', 'Database sudah berisi data pengurus! Silakan langsung login.');
+    }
+    \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+    \Illuminate\Support\Facades\Artisan::call('db:seed', ['--force' => true]);
+    return redirect('/login')->with('success', 'Database berhasil di-seed (28 akun pengurus siap)! Silakan login.');
+});
+
 // Auth
 Route::get('/login',  [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login']);
