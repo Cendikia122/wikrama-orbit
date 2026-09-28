@@ -92,6 +92,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/monitoring', [MonitoringController::class, 'index'])->name('monitoring.index');
     Route::get('/monitoring/tambah', [MonitoringController::class, 'create'])->name('monitoring.create');
     Route::post('/monitoring', [MonitoringController::class, 'store'])->name('monitoring.store');
+    Route::get('/monitoring/template-csv', [MonitoringController::class, 'downloadTemplate'])->name('monitoring.template-csv');
+    Route::post('/monitoring/import-csv', [MonitoringController::class, 'importCsv'])->name('monitoring.import-csv');
     Route::get('/monitoring/{id}/edit', [MonitoringController::class, 'edit'])->name('monitoring.edit');
     Route::put('/monitoring/{id}', [MonitoringController::class, 'update'])->name('monitoring.update');
     Route::patch('/monitoring/{id}/toggle', [MonitoringController::class, 'toggleAktif'])->name('monitoring.toggle');
