@@ -182,78 +182,130 @@ class MonitoringController extends Controller
     {
         $this->checkManage();
         $request->validate([
-            'csv_file' => 'required|file|max:2048',
+            'csv_file' => 'required|file|max:5120',
         ]);
 
         $file = $request->file('csv_file');
         $path = $file->getRealPath();
+        $ext  = strtolower($file->getClientOriginalExtension());
 
-        // Detect delimiter (comma or semicolon)
-        $firstLine = fgets(fopen($path, 'r'));
-        $delimiter = (strpos($firstLine, ';') !== false && strpos($firstLine, ',') === false) ? ';' : ',';
+        $rows = [];
+        if ($ext === 'xlsx') {
+            $rows = $this->parseXlsx($path);
+        } else {
+            // Read CSV (support semicolon or comma delimiter)
+            $fileHandle = fopen($path, 'r');
+            $firstLine  = fgets($fileHandle);
+            fclose($fileHandle);
+            $delimiter  = (strpos($firstLine, ';') !== false && strpos($firstLine, ',') === false) ? ';' : ',';
 
-        $handle = fopen($path, 'r');
-        $header = fgetcsv($handle, 1000, $delimiter);
-
-        if (!$header) {
-            return back()->with('error', 'File CSV kosong atau tidak valid.');
+            $handle = fopen($path, 'r');
+            while (($r = fgetcsv($handle, 1000, $delimiter)) !== false) {
+                $rows[] = $r;
+            }
+            fclose($handle);
         }
 
-        // Clean headers (trim, lowercase, remove BOM)
-        $header = array_map(function ($h) {
-            return strtolower(trim(preg_replace('/[\x00-\x1F\x80-\xFF]/', '', $h)));
-        }, $header);
+        if (empty($rows)) {
+            return back()->with('error', 'File kosong atau tidak dapat dibaca.');
+        }
+
+        // Find header row (search first 10 rows for "nama" or "name")
+        $headerRowIdx = -1;
+        $nameColIdx   = -1;
+        $roleColIdx   = -1;
+        $jabatanColIdx= -1;
+        $usernameColIdx = -1;
+        $emailColIdx  = -1;
+        $bidangColIdx = -1;
+
+        foreach ($rows as $rIdx => $row) {
+            if (!is_array($row)) continue;
+            foreach ($row as $cIdx => $cell) {
+                $c = strtolower(trim((string)$cell));
+                if ($c === 'nama' || $c === 'name' || str_contains($c, 'nama lengkap')) {
+                    $headerRowIdx = $rIdx;
+                    break 2;
+                }
+            }
+        }
+
+        // Fallback: row 0 is header
+        if ($headerRowIdx === -1) {
+            $headerRowIdx = 0;
+        }
+
+        // Map column indices from header row
+        foreach ($rows[$headerRowIdx] as $cIdx => $cell) {
+            $c = strtolower(trim(preg_replace('/[\x00-\x1F\x80-\xFF]/', '', (string)$cell)));
+            if (str_contains($c, 'nama') || $c === 'name') $nameColIdx = $cIdx;
+            elseif ($c === 'sekbid' || $c === 'divisi' || $c === 'role') $roleColIdx = $cIdx;
+            elseif (str_contains($c, 'jabatan') || str_contains($c, 'jobdesk') || $c === 'rayon') $jabatanColIdx = $cIdx;
+            elseif ($c === 'username') $usernameColIdx = $cIdx;
+            elseif ($c === 'email') $emailColIdx = $cIdx;
+            elseif ($c === 'bidang') $bidangColIdx = $cIdx;
+        }
+
+        if ($nameColIdx === -1) {
+            $nameColIdx = 1; // default: column 1 (after No)
+        }
 
         $imported = 0;
-        $skipped = 0;
+        $skipped  = 0;
 
-        while (($row = fgetcsv($handle, 1000, $delimiter)) !== false) {
-            if (empty(array_filter($row))) continue;
+        for ($i = $headerRowIdx + 1; $i < count($rows); $i++) {
+            $row = $rows[$i];
+            if (!is_array($row) || empty(array_filter($row))) continue;
 
-            $data = [];
-            foreach ($header as $idx => $colName) {
-                $data[$colName] = isset($row[$idx]) ? trim($row[$idx]) : null;
+            $name = isset($row[$nameColIdx]) ? trim((string)$row[$nameColIdx]) : '';
+            if (!$name || strtolower($name) === 'nama' || strtolower($name) === 'no' || is_numeric($name)) continue;
+
+            $rawRole = $roleColIdx >= 0 && isset($row[$roleColIdx]) ? strtolower(trim((string)$row[$roleColIdx])) : '';
+            $jabatan = $jabatanColIdx >= 0 && isset($row[$jabatanColIdx]) ? trim((string)$row[$jabatanColIdx]) : 'Anggota';
+            $rawUsername = $usernameColIdx >= 0 && isset($row[$usernameColIdx]) ? trim((string)$row[$usernameColIdx]) : '';
+            $rawEmail = $emailColIdx >= 0 && isset($row[$emailColIdx]) ? trim((string)$row[$emailColIdx]) : '';
+            $bidang = $bidangColIdx >= 0 && isset($row[$bidangColIdx]) ? (int)$row[$bidangColIdx] : 0;
+
+            // Determine role & sekbid number
+            $role = 'dewan_harian';
+            if (str_contains($rawRole, 'pembina')) {
+                $role = 'pembina';
+                if ($jabatan === 'Anggota') $jabatan = 'Pembina OSIS';
+            } elseif (str_contains($rawRole, 'penasihat') || $rawRole === 'dp') {
+                $role = 'dewan_penasihat';
+                if ($jabatan === 'Anggota') $jabatan = 'Dewan Penasihat';
+            } elseif (str_contains($rawRole, 'mpr')) {
+                $role = 'mpr';
+                if ($jabatan === 'Anggota') $jabatan = 'Anggota MPR';
+            } elseif (str_contains($rawRole, 'sekbid') || str_contains($rawRole, 'koorbid') || str_contains($rawRole, 'koordinator')) {
+                $role = 'koordinator_bidang';
+                if (preg_match('/(\d+)/', $rawRole, $m)) {
+                    $bidang = (int)$m[1];
+                }
+                if ($jabatan === 'Anggota') $jabatan = 'Seksi Bidang ' . ($bidang ?: '');
+            } elseif (str_contains($rawRole, 'dh') || str_contains($rawRole, 'harian')) {
+                $role = 'dewan_harian';
+                if ($jabatan === 'Anggota') $jabatan = 'Dewan Harian';
             }
 
-            // Map columns (support Indonesian or English headers)
-            $name     = $data['nama'] ?? $data['name'] ?? null;
-            $username = $data['username'] ?? null;
-            $email    = $data['email'] ?? null;
-            $rawRole  = strtolower($data['role'] ?? '');
-            $jabatan  = $data['jabatan'] ?? $data['position'] ?? 'Anggota';
-            $bidang   = (int)($data['bidang'] ?? 0);
-            $angkatan = $data['angkatan'] ?? '2025/2026';
-            $periode  = $data['periode'] ?? '2025/2026';
-
-            if (!$name) continue;
-
-            // Generate username if empty
+            // Generate clean username (safe for DB, max 20 chars)
+            $username = $rawUsername;
             if (!$username) {
-                $username = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', explode(' ', $name)[0])) . rand(10, 99);
+                $cleanName = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', explode(' ', $name)[0]));
+                $username = substr($cleanName, 0, 14) . rand(10, 99);
+            } else {
+                $username = substr(strtolower(preg_replace('/[^a-zA-Z0-9_-]/', '', $username)), 0, 20);
             }
 
-            // Generate email if empty or missing domain
+            // Generate email
+            $email = $rawEmail;
             if (!$email) {
                 $email = $username . '@smkwikrama.sch.id';
             } elseif (!str_ends_with($email, '@smkwikrama.sch.id')) {
                 $email = explode('@', $email)[0] . '@smkwikrama.sch.id';
             }
 
-            // Map role aliases
-            $role = 'dewan_harian';
-            if (str_contains($rawRole, 'pembina')) {
-                $role = 'pembina';
-            } elseif (str_contains($rawRole, 'penasihat') || $rawRole === 'dp') {
-                $role = 'dewan_penasihat';
-            } elseif (str_contains($rawRole, 'mpr')) {
-                $role = 'mpr';
-            } elseif (str_contains($rawRole, 'koorbid') || str_contains($rawRole, 'koordinator') || str_contains($rawRole, 'sekbid') || $bidang > 0) {
-                $role = 'koordinator_bidang';
-            } elseif (str_contains($rawRole, 'dh') || str_contains($rawRole, 'harian')) {
-                $role = 'dewan_harian';
-            }
-
-            // Skip if username or email already exists
+            // Skip duplicate
             if (User::where('username', $username)->orWhere('email', $email)->exists()) {
                 $skipped++;
                 continue;
@@ -267,15 +319,13 @@ class MonitoringController extends Controller
                 'role'      => $role,
                 'jabatan'   => $jabatan,
                 'bidang'    => $bidang,
-                'angkatan'  => $angkatan,
-                'periode'   => $periode,
+                'angkatan'  => '2025/2026',
+                'periode'   => '2025/2026',
                 'is_aktif'  => 1,
             ]);
 
             $imported++;
         }
-
-        fclose($handle);
 
         $msg = "Berhasil mengimpor $imported anggota baru.";
         if ($skipped > 0) {
@@ -283,6 +333,68 @@ class MonitoringController extends Controller
         }
 
         return redirect()->route('monitoring.index')->with('success', $msg);
+    }
+
+    /**
+     * Pure PHP parser for XLSX files without external composer packages.
+     */
+    private function parseXlsx(string $path): array
+    {
+        $zip = new \ZipArchive();
+        if ($zip->open($path) !== true) return [];
+
+        // 1. Read shared strings
+        $strings = [];
+        if (($idx = $zip->locateName('xl/sharedStrings.xml')) !== false) {
+            $xml = @simplexml_load_string($zip->getFromIndex($idx));
+            if ($xml && isset($xml->si)) {
+                foreach ($xml->si as $val) {
+                    if (isset($val->t)) {
+                        $strings[] = (string)$val->t;
+                    } elseif (isset($val->r)) {
+                        $t = '';
+                        foreach ($val->r as $r) { $t .= (string)$r->t; }
+                        $strings[] = $t;
+                    } else {
+                        $strings[] = '';
+                    }
+                }
+            }
+        }
+
+        // 2. Read first worksheet
+        $sheetXmlStr = $zip->getFromName('xl/worksheets/sheet1.xml');
+        if (!$sheetXmlStr) {
+            // Try locating any worksheet
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $filename = $zip->getNameIndex($i);
+                if (str_starts_with($filename, 'xl/worksheets/sheet') && str_ends_with($filename, '.xml')) {
+                    $sheetXmlStr = $zip->getFromIndex($i);
+                    break;
+                }
+            }
+        }
+
+        $rows = [];
+        if ($sheetXmlStr) {
+            $sheetXml = @simplexml_load_string($sheetXmlStr);
+            if ($sheetXml && isset($sheetXml->sheetData->row)) {
+                foreach ($sheetXml->sheetData->row as $r) {
+                    $row = [];
+                    foreach ($r->c as $c) {
+                        $val = (string)$c->v;
+                        if ((string)$c['t'] === 's') {
+                            $val = $strings[(int)$val] ?? '';
+                        }
+                        $row[] = trim($val);
+                    }
+                    $rows[] = $row;
+                }
+            }
+        }
+
+        $zip->close();
+        return $rows;
     }
 
     public function destroy($id)

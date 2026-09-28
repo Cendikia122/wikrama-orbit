@@ -28,14 +28,21 @@ class PelanggaranGdsController extends Controller
     public function index()
     {
         $this->checkAccess();
-        $filter_tanggal = request('tanggal', Carbon::today()->toDateString());
+        $filter_tanggal = request('filter_tanggal', request('tanggal', Carbon::today()->toDateString()));
         $pelanggaran = PelanggaranGds::where('tanggal', $filter_tanggal)
             ->orderBy('jam', 'desc')
             ->get();
-        $all_dates = PelanggaranGds::selectRaw('DATE(tanggal) as tanggal_str')
-            ->distinct()->orderBy('tanggal', 'desc')->limit(30)->pluck('tanggal_str');
+
+        // MySQL safe: distinct tanggal without conflicting order by
+        $all_dates = PelanggaranGds::distinct()
+            ->orderBy('tanggal', 'desc')
+            ->limit(30)
+            ->pluck('tanggal');
+
+        $pelanggaran_hari_ini = PelanggaranGds::where('tanggal', Carbon::today()->toDateString())->count();
         $jenis_list = $this->jenisPelanggaran;
-        return view('piket.pelanggaran', compact('pelanggaran', 'filter_tanggal', 'all_dates', 'jenis_list'));
+
+        return view('piket.pelanggaran', compact('pelanggaran', 'filter_tanggal', 'all_dates', 'jenis_list', 'pelanggaran_hari_ini'));
     }
 
     public function store(Request $request)
@@ -47,7 +54,7 @@ class PelanggaranGdsController extends Controller
             'jurusan'             => 'nullable|string',
             'jenis_pelanggaran'   => 'required|string',
             'keterangan_tambahan' => 'nullable|string',
-            'tingkat_keparahan'   => 'required|in:ringan,sedang,berat',
+            'tingkat_keparahan'   => 'required|in:ringan,sedang,berat,Ringan,Sedang,Berat',
         ]);
 
         PelanggaranGds::create([
@@ -58,7 +65,7 @@ class PelanggaranGdsController extends Controller
             'jurusan'             => $request->jurusan,
             'jenis_pelanggaran'   => $request->jenis_pelanggaran,
             'keterangan_tambahan' => $request->keterangan_tambahan,
-            'tingkat_keparahan'   => $request->tingkat_keparahan,
+            'tingkat_keparahan'   => strtolower($request->tingkat_keparahan),
             'dicatat_oleh'        => Auth::user()->name,
             'jabatan_pencatat'    => Auth::user()->jabatan,
         ]);

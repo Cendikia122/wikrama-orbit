@@ -58,9 +58,9 @@
                             <td class="px-4 py-3 text-slate-600">{{ $p->kelas }}</td>
                             <td class="px-4 py-3 text-slate-800">{{ $p->jenis_pelanggaran }}</td>
                             <td class="px-4 py-3">
-                                @if($p->tingkat_keparahan == 'Ringan')
+                                @if(strtolower($p->tingkat_keparahan) == 'ringan')
                                     <span class="badge bg-yellow-100 text-yellow-800">Ringan</span>
-                                @elseif($p->tingkat_keparahan == 'Sedang')
+                                @elseif(strtolower($p->tingkat_keparahan) == 'sedang')
                                     <span class="badge bg-orange-100 text-orange-800">Sedang</span>
                                 @else
                                     <span class="badge bg-red-100 text-red-800">Berat</span>

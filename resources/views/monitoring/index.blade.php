@@ -199,10 +199,9 @@
             <div class="my-4 space-y-3">
                 <div class="bg-blue-50 border border-blue-200 rounded-xl p-3.5 text-xs text-blue-800">
                     <p class="font-semibold mb-1">💡 Petunjuk Pengisian dari Excel:</p>
-                    <p>1. Unduh template CSV di bawah ini.</p>
-                    <p>2. Buka dengan Microsoft Excel / Google Sheets, lalu masukkan nama-nama anggota.</p>
-                    <p>3. Simpan dengan format <strong>CSV (Comma Delimited / UTF-8)</strong> lalu upload di sini.</p>
-                    <p class="mt-2 text-slate-600 font-mono">Kolom: nama, username, email, role, jabatan, bidang, angkatan, periode</p>
+                    <p>1. Unduh template CSV di bawah ini, atau gunakan file jadwal Excel (.xlsx) yang sudah ada.</p>
+                    <p>2. Kolom yang didukung: <strong>nama, username, email, role/sekbid, jabatan/rayon, bidang</strong>.</p>
+                    <p>3. Kamu bisa langsung upload file <strong>.csv</strong> maupun <strong>.xlsx (Excel langsung)</strong>!</p>
                 </div>
 
                 <div class="flex justify-end">
@@ -216,8 +215,8 @@
             <form method="POST" action="/monitoring/import-csv" enctype="multipart/form-data" class="space-y-4">
                 @csrf
                 <div>
-                    <label class="block text-xs font-medium text-slate-700 mb-1">Pilih File CSV (.csv)</label>
-                    <input type="file" name="csv_file" accept=".csv,.txt" required
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Pilih File (.csv atau .xlsx)</label>
+                    <input type="file" name="csv_file" accept=".csv,.txt,.xlsx" required
                         class="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-slate-300 rounded-lg p-1.5 cursor-pointer">
                 </div>
 
