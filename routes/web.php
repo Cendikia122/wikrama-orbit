@@ -10,6 +10,7 @@ use App\Http\Controllers\KeuanganController;
 use App\Http\Controllers\AbsensiGdsController;
 use App\Http\Controllers\PelanggaranGdsController;
 use App\Http\Controllers\MonitoringController;
+use App\Http\Controllers\PreviewUiController;
 use Illuminate\Support\Facades\Route;
 
 // ─────────────────────────────────────────────── PUBLIC ROUTES ─────────────────
@@ -44,6 +45,15 @@ Route::get('/aspirasi', [AspirasiController::class, 'index'])->name('aspirasi.in
 // Live Events (public view)
 Route::get('/live-events',       [LiveEventController::class, 'index'])->name('live-events.index');
 Route::get('/live-events/{id}',  [LiveEventController::class, 'show'])->name('live-events.show');
+
+// ─────────────────────────────────────────────── FIGMA PREVIEW (TEMPORARY) ─────────
+Route::get('/preview-ui',              [PreviewUiController::class, 'index'])->name('preview.index');
+Route::get('/preview-ui/dashboard',    [PreviewUiController::class, 'dashboard'])->name('preview.dashboard');
+Route::get('/preview-ui/monitoring',   [PreviewUiController::class, 'monitoring'])->name('preview.monitoring');
+Route::get('/preview-ui/pelanggaran',  [PreviewUiController::class, 'pelanggaran'])->name('preview.pelanggaran');
+Route::get('/preview-ui/absensi',      [PreviewUiController::class, 'absensi'])->name('preview.absensi');
+Route::get('/preview-ui/piket',        [PreviewUiController::class, 'piket'])->name('preview.piket');
+Route::get('/preview-ui/keuangan',     [PreviewUiController::class, 'keuangan'])->name('preview.keuangan');
 
 // ─────────────────────────────────────────────── AUTH ROUTES ───────────────────
 
